@@ -3,14 +3,15 @@ package org.fengfei.lanproxy.server.handlers;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.fengfei.lanproxy.protocol.Constants;
 import org.fengfei.lanproxy.protocol.ProxyMessage;
-import org.fengfei.lanproxy.server.Constants;
 import org.fengfei.lanproxy.server.ProxyChannelManager;
 import org.fengfei.lanproxy.server.config.ProxyConfig;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.SimpleChannelInboundHandler;
 
 /**
@@ -63,7 +64,7 @@ public class UserChannelHandler extends SimpleChannelInboundHandler<ByteBuf> {
             String userId = newUserId();
             String lanInfo = ProxyConfig.getInstance().getLanInfo(sa.getPort());
             // 用户连接到代理服务器时，设置用户连接不可读，等待代理后端服务器连接成功后再改变为可读状态
-            ProxyChannelManager.setUserChannelReadability(userChannel, false, false);
+            userChannel.config().setOption(ChannelOption.AUTO_READ, false);
             ProxyChannelManager.addUserChannelToCmdChannel(cmdChannel, userId, userChannel);
             ProxyMessage proxyMessage = new ProxyMessage();
             proxyMessage.setType(ProxyMessage.TYPE_CONNECT);
@@ -97,6 +98,7 @@ public class UserChannelHandler extends SimpleChannelInboundHandler<ByteBuf> {
                 proxyChannel.attr(Constants.CLIENT_KEY).remove();
                 proxyChannel.attr(Constants.USER_ID).remove();
 
+                proxyChannel.config().setOption(ChannelOption.AUTO_READ, true);
                 // 通知客户端，用户连接已经断开
                 ProxyMessage proxyMessage = new ProxyMessage();
                 proxyMessage.setType(ProxyMessage.TYPE_DISCONNECT);
@@ -120,14 +122,10 @@ public class UserChannelHandler extends SimpleChannelInboundHandler<ByteBuf> {
             // 该端口还没有代理客户端
             ctx.channel().close();
         } else {
-
-            // 通知代理客户端，用户连接可写状态
-            String userId = ProxyChannelManager.getUserChannelUserId(userChannel);
-            ProxyMessage proxyMessage = new ProxyMessage();
-            proxyMessage.setType(ProxyMessage.C_TYPE_WRITE_CONTROL);
-            proxyMessage.setUri(userId);
-            proxyMessage.setData(userChannel.isWritable() ? new byte[] { 0x01 } : new byte[] { 0x00 });
-            cmdChannel.writeAndFlush(proxyMessage);
+            Channel proxyChannel = userChannel.attr(Constants.NEXT_CHANNEL).get();
+            if (proxyChannel != null) {
+                proxyChannel.config().setOption(ChannelOption.AUTO_READ, userChannel.isWritable());
+            }
         }
 
         super.channelWritabilityChanged(ctx);

@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.fengfei.lanproxy.client.listener.ProxyChannelBorrowListener;
 import org.fengfei.lanproxy.common.Config;
+import org.fengfei.lanproxy.protocol.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,6 +69,8 @@ public class ClientChannelMannager {
         if (proxyChannelPool.size() > MAX_POOL_SIZE) {
             proxyChanel.close();
         } else {
+            proxyChanel.config().setOption(ChannelOption.AUTO_READ, true);
+            proxyChanel.attr(Constants.NEXT_CHANNEL).remove();
             proxyChannelPool.offer(proxyChanel);
             logger.debug("return ProxyChanel to the pool, channel is {}, pool size is {} ", proxyChanel, proxyChannelPool.size());
         }
@@ -108,37 +111,6 @@ public class ClientChannelMannager {
     public static boolean isRealServerReadable(Channel realServerChannel) {
         return realServerChannel.attr(CLIENT_CHANNEL_WRITEABLE).get() && realServerChannel.attr(USER_CHANNEL_WRITEABLE).get();
     }
-
-    public static void setRealServerChannelReadability(Channel realServerChannel, Boolean client, Boolean user) {
-        logger.debug("update real server channel readability, {} {} {}", realServerChannel, client, user);
-        if (realServerChannel == null) {
-            return;
-        }
-
-        if (client != null) {
-            realServerChannel.attr(CLIENT_CHANNEL_WRITEABLE).set(client);
-        }
-
-        if (user != null) {
-            realServerChannel.attr(USER_CHANNEL_WRITEABLE).set(user);
-        }
-
-        if (realServerChannel.attr(CLIENT_CHANNEL_WRITEABLE).get() && realServerChannel.attr(USER_CHANNEL_WRITEABLE).get()) {
-            realServerChannel.config().setOption(ChannelOption.AUTO_READ, true);
-        } else {
-            realServerChannel.config().setOption(ChannelOption.AUTO_READ, false);
-        }
-    }
-
-    // public static void notifyChannelWritabilityChanged(Channel channel) {
-    // logger.debug("channel writability changed, {}", channel.isWritable());
-    // Iterator<Entry<String, Channel>> entryIte =
-    // realServerChannels.entrySet().iterator();
-    // while (entryIte.hasNext()) {
-    // setRealServerChannelReadability(entryIte.next().getValue(),
-    // channel.isWritable(), null);
-    // }
-    // }
 
     public static void clearRealServerChannels() {
         logger.warn("channel closed, clear real server channels");

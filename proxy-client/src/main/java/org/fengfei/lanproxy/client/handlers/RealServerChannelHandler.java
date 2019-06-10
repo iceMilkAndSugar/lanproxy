@@ -1,7 +1,7 @@
 package org.fengfei.lanproxy.client.handlers;
 
 import org.fengfei.lanproxy.client.ClientChannelMannager;
-import org.fengfei.lanproxy.client.Constants;
+import org.fengfei.lanproxy.protocol.Constants;
 import org.fengfei.lanproxy.protocol.ProxyMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.SimpleChannelInboundHandler;
 
 /**
@@ -63,14 +64,9 @@ public class RealServerChannelHandler extends SimpleChannelInboundHandler<ByteBu
     @Override
     public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
         Channel realServerChannel = ctx.channel();
-        String userId = ClientChannelMannager.getRealServerChannelUserId(realServerChannel);
-        Channel channel = ClientChannelMannager.getCmdChannel();
-        if (channel != null) {
-            ProxyMessage proxyMessage = new ProxyMessage();
-            proxyMessage.setType(ProxyMessage.C_TYPE_WRITE_CONTROL);
-            proxyMessage.setUri(userId);
-            proxyMessage.setData(realServerChannel.isWritable() ? new byte[] { 0x01 } : new byte[] { 0x00 });
-            channel.writeAndFlush(proxyMessage);
+        Channel proxyChannel = realServerChannel.attr(Constants.NEXT_CHANNEL).get();
+        if (proxyChannel != null) {
+            proxyChannel.config().setOption(ChannelOption.AUTO_READ, realServerChannel.isWritable());
         }
 
         super.channelWritabilityChanged(ctx);
